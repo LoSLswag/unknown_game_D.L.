@@ -18,3 +18,13 @@ Ryzen 7 7800x3d
 32gd DDR5
 NVMe 2TB Storage
 Широкополосное подключение к интернету
+
+**Управление**
+w - forward/вперёд
+a - left/влево
+s - backwards/назад
+d - right/вправо
+
+**Авторы**
+LoSls - Дизайнер, иноватор
+Detalis - Backend Разраб
