@@ -1,72 +1,115 @@
 import pygame
 import sys
 import math 
+import random
+
 # Инициализация Pygame
 pygame.init()
 
 # Настройки экрана
-CELL_SIZE = 32
-
+CELL_SIZE = 64
+CHUNK_SIZE = 16  # Размер чанка в тайлах
+map_test = {}
 
 # Создаем полноэкранное окно
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
+pygame.display.set_caption("Game")
 
 # Цвета
 WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-
-# Цвета и тольшина линий
-GRID_LINE_COLOR = (50, 50, 50,)
-
-# Функция для выравнивания позиции к центру клетки
-def align_to_grid(x, y, cell_size):
-#    center_x = x // cell_size 
-#    center_y = y // cell_size
-    center_x = x // cell_size * cell_size
-    center_y = y // cell_size * cell_size
-    return center_x, center_y
+GREEN = (34, 139, 34)
+BROWN = (139, 69, 19)
+WATER_BLUE = (64, 164, 223)
+GRAY = (128, 128, 128)
+GRID_LINE_COLOR = (50, 50, 50)
 
 # Игрок
-player_size = CELL_SIZE 
-initial_player_screen_center_x = WIDTH // 2
-initial_player_screen_center_y = HEIGHT // 2
-player_x, player_y = align_to_grid(initial_player_screen_center_x, initial_player_screen_center_y, CELL_SIZE)
-speed = 500
-
-# Статичный объект (в заданной позиции в игровом мире)
-static_object_x2 = pygame.rect(10, 10, 10, 10)
-static_object_y1 = pygame.rect(10, 10, 10, 10)
-static_object_x, static_object_y = align_to_grid(static_object_x2, static_object_y1, CELL_SIZE)
+player_size = pygame.Rect(WIDTH // 2, HEIGHT // 2, CELL_SIZE, CELL_SIZE)
+speed = 200
 
 # Камера
-#camera_pos = [5, 5]
-camera_x, camera_y = WIDTH, HEIGHT 
+camera_x0, camera_y0 = 0, 0
 
+def generate_chunk(chunk_x, chunk_y):
+    """Генерирует чанк по его координатам"""
+    chunk = []
+    for y in range(CHUNK_SIZE):
+        row = []
+        for x in range(CHUNK_SIZE):
+            # Используем seed на основе координат чанка для стабильности
+            seed = chunk_x * 99991 + chunk_y * 997
+            random.seed(seed + x * 31 + y * 73)
+            
+            # Случайный тип тайла (0 - земля, 1 - вода, 2 - гора, 3 - дерево/трава)
+            tile_type = random.randint(0, 3)
+            row.append(tile_type)
+        chunk.append(row)
+    return chunk
 
-#тодщина линий
-LINE_WIDTH = 1
+def get_chunk(chunk_x, chunk_y):
+    """Получает чанк — генерирует если не существует, иначе возвращает существующий"""
+    if (chunk_x, chunk_y) not in map_test:
+        map_test[(chunk_x, chunk_y)] = generate_chunk(chunk_x, chunk_y)
+    return map_test[(chunk_x, chunk_y)]
 
+def get_tile_color(tile_type):
+    """Возвращает цвет для типа тайла"""
+    colors = {
+        0: BROWN,      # земля
+        1: WATER_BLUE, # вода
+        2: GRAY,       # гора
+        3: GREEN       # трава/дерево
+    }
+    return colors.get(tile_type, BROWN)
+
+def render_visible_area(screen, camera_x, camera_y, screen_width, screen_height, tile_size):
+    """Отрисовывает видимую часть карты"""
+    # Вычисляем границы видимости в тайлах
+    start_tile_x = camera_x // tile_size
+    start_tile_y = camera_y // tile_size
+    end_tile_x = (camera_x + screen_width) // tile_size + 1
+    end_tile_y = (camera_y + screen_height) // tile_size + 1
+    
+    # Вычисляем границы видимости в чанках
+    start_chunk_x = start_tile_x // CHUNK_SIZE
+    start_chunk_y = start_tile_y // CHUNK_SIZE
+    end_chunk_x = end_tile_x // CHUNK_SIZE + 1
+    end_chunk_y = end_tile_y // CHUNK_SIZE + 1
+    
+    # Отрисовываем все видимые чанки
+    for chunk_x in range(start_chunk_x, end_chunk_x):
+        for chunk_y in range(start_chunk_y, end_chunk_y):
+            chunk = get_chunk(chunk_x, chunk_y)
+            
+            # Отрисовываем каждый тайл в чанке
+            for y, row in enumerate(chunk):
+                for x, tile_type in enumerate(row):
+                    # Координаты тайла в мировых координатах
+                    world_x = chunk_x * CHUNK_SIZE * tile_size + x * tile_size - camera_x
+                    world_y = chunk_y * CHUNK_SIZE * tile_size + y * tile_size - camera_y
+                    
+                    # Отрисовка тайла
+                    color = get_tile_color(tile_type)
+                    pygame.draw.rect(screen, color, (world_x, world_y, tile_size, tile_size))
+
+# Загрузка спрайтов
 try:
-    original_img = pygame.image.load('unknown_game_DL\sprite\Sprite-0001.png').convert_alpha()
+    original_img = pygame.image.load('unknown_game_DL/sprite/Sprite-0001.png').convert_alpha()
 except pygame.error:
     # Если файла нет, создаём тестовый спрайт (красный круг)
     original_img = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
     pygame.draw.circle(original_img, (255, 80, 80), (CELL_SIZE // 2, CELL_SIZE // 2), CELL_SIZE // 3)
+    pygame.draw.rect(original_img, (200, 200, 200), (0, 0, CELL_SIZE, CELL_SIZE), 2)
 
 sprite = pygame.transform.smoothscale(original_img, (CELL_SIZE, CELL_SIZE))
 
-# Координаты клетки, куда поместим спрайт (столбец, строка)
-target_col, target_row = 3, 2
-x = target_col * CELL_SIZE
-y = target_row * CELL_SIZE
-
-# Переменные управления движением
-direction = None
-move_timer = 0
-move_interval = 200  # Интервал в 200 миллисекунд (0,2 секунды)
+# Создаем несколько тестовых стен
+wall1 = pygame.Rect(5 * CELL_SIZE, 5 * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+wall2 = pygame.Rect(10 * CELL_SIZE, 10 * CELL_SIZE, CELL_SIZE, CELL_SIZE)
 
 # Игровой цикл
 clock = pygame.time.Clock()
@@ -74,85 +117,51 @@ running = True
 
 while running:
     dt = clock.tick(120) / 1000.0
+    
     # Обработка событий
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                running = False     
+                running = False
+    
+    # Сохраняем предыдущую позицию на случай коллизии
+    old_x, old_y = player_size.x, player_size.y
+    
+    # Движение игрока
     keys = pygame.key.get_pressed()
-    dx = 0
-    dy = 0
-    if keys[pygame.K_LEFT] or keys[pygame.K_a]: dx -= 1
-    if keys[pygame.K_RIGHT] or keys[pygame.K_d]: dx += 1
-    if keys[pygame.K_UP] or keys[pygame.K_w]: dy -= 1
-    if keys[pygame.K_DOWN] or keys[pygame.K_s]: dy += 1
-
-    if dx != 0 and dy != 0:
-        length = math.sqrt(dx**2 + dy**2)
-        dx /= length
-        dy /= length
-
-    player_x += dx * speed * dt
-    player_y += dy * speed * dt
-
-    # проверка границ
-
-    if player_x < 0:
-        player_x = 0
-    elif player_x + CELL_SIZE > WIDTH:
-        player_x = WIDTH - CELL_SIZE
-    if player_y < 0:
-        player_y = 0
-    elif player_y + CELL_SIZE > HEIGHT:
-        player_y = HEIGHT - CELL_SIZE
+    if keys[pygame.K_LEFT] or keys[pygame.K_a]: 
+        player_size.x -= speed * dt
+    if keys[pygame.K_RIGHT] or keys[pygame.K_d]: 
+        player_size.x += speed * dt 
+    if keys[pygame.K_UP] or keys[pygame.K_w]: 
+        player_size.y -= speed * dt
+    if keys[pygame.K_DOWN] or keys[pygame.K_s]: 
+        player_size.y += speed * dt
     
-    #цвта заднего экрана 
-    BACKGROUND_COLOR = (0, 0, 0)
+    # Проверка коллизии со стенами
+    if player_size.colliderect(wall1) or player_size.colliderect(wall2):
+        # Откатываем позицию, чтобы игрок не "заходил" внутрь стены
+        player_size.x, player_size.y = old_x, old_y
     
-    #коллизия 
-    if CELL_SIZE.collideret(static_object_x):
-        print("")
+    # Обновление камеры (следим за игроком)
+    camera_x0 = player_size.x - WIDTH // 2
+    camera_y0 = player_size.y - HEIGHT // 2
+    
     # Отрисовка
-    screen.fill(BACKGROUND_COLOR)
-
-    # Рисуем статичный объект (на позиции в карте, с учетом смещения камеры)
+    screen.fill(BLACK)  # Заполняем черным фоном
     
-    obiekt_sprite = pygame.image.load('unknown_game_DL\sprite\Sprite-0001.png')
-    screen.blit(obiekt_sprite, (static_object_x - camera_x, static_object_y - camera_y))
-
+    # Отрисовка видимой области карты
+    render_visible_area(screen, camera_x0, camera_y0, WIDTH, HEIGHT, CELL_SIZE)
+    
+    # Отрисовка стен
+    screen.blit(sprite, (wall1.x - camera_x0, wall1.y - camera_y0))
+    screen.blit(sprite, (wall2.x - camera_x0, wall2.y - camera_y0))
+    
     # Отрисовка игрока
+    screen.blit(sprite, (player_size.x - camera_x0, player_size.y - camera_y0))
     
-    player_sprite = pygame.image.load('unknown_game_DL\sprite\Sprite-0001.png')
-    screen.blit(player_sprite, (player_x - camera_x, player_y - camera_y))
-
-    # Рисуем сетку
-    
-    for x in range(0, WIDTH, CELL_SIZE):
-        pygame.draw.line(screen, GRID_LINE_COLOR, (x + CELL_SIZE/2, 0), (x + CELL_SIZE/2, HEIGHT),LINE_WIDTH)  # Вертикальные линии
-    for y in range(0, HEIGHT, CELL_SIZE):
-        pygame.draw.line(screen, GRID_LINE_COLOR, (0, y + CELL_SIZE/2.5), (WIDTH, y + CELL_SIZE/2.5), LINE_WIDTH)  # Горизонтальные линии
-        
-        
-        '''x = math.floor(world_left / CELL_SIZE) * CELL_SIZE
-    while x <= world_right:
-        screen_x = x * zoom + camera_x   # ← zoom используется здесь!
-        pygame.draw.line(screen, GRID_LINE_COLOR, (screen_x, 0), (screen_x, HEIGHT), 1)
-        x += CELL_SIZE
-    y = math.floor(world_top / CELL_SIZE) * CELL_SIZE
-    while y <= world_bottom:
-        screen_y = y * zoom + camera_y
-        pygame.draw.line(screen, GRID_LINE_COLOR, (0, screen_y), (WIDTH, screen_y), 1)
-        y += CELL_SIZE'''
-    
-    # Ограничение движения камеры по границам карты
-    map_width = 1
-    map_height = 1
-
-    camera_x = max(0, min(camera_x, map_width - WIDTH))
-    camera_y = max(0, min(camera_y, map_height - HEIGHT))
-
     # Обновление экрана
     pygame.display.flip()
     
