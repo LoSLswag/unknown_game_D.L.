@@ -1,49 +1,51 @@
-import pygame as pg
-import sys
-import math 
-import random
-import settings
+import pygame as pg 
 import biome as bm
-from enum import Enum
-import time
-# Инициализация Pygame
-pg.init()
+import sys 
+import math  
+import random 
+import time 
+from enum import Enum 
+import settings 
+# Инициализация Pg 
+pg.init() 
+ 
+# Настройки экрана 
 
-# Настройки экрана
-CELL_SIZE = 64
-CHUNK_SIZE = 16  # Размер чанка в тайлах
-map_test = {}
+CELL_SIZE = 64 
+CHUNK_SIZE = 16  # Размер чанка в тайлах 
+map_test = {} 
 
-# Создаем полноэкранное окно
-screen = pg.display.set_mode((0, 0), pg.FULLSCREEN)
-WIDTH, HEIGHT = screen.get_size()
-pg.display.set_caption("Game")
+# Создаем полноэкранное окно 
+screen = pg.display.set_mode((0, 0), pg.FULLSCREEN) 
+WIDTH, HEIGHT = screen.get_size() 
+pg.display.set_caption("Game") 
 
-# Цвета
-WHITE = (255, 255, 255)
-BLUE = (0, 0, 255)
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
-GREEN = (34, 139, 34)
-BROWN = (139, 69, 19)
-WATER_BLUE = (64, 164, 223)
-GRAY = (128, 128, 128)
-GRID_LINE_COLOR = (50, 50, 50)
+# Цвета 
 
-# Игрок
-player_size = pg.Rect(WIDTH // 2, HEIGHT // 2, CELL_SIZE, CELL_SIZE)
-speed = 200
+WHITE = (255, 255, 255) 
+BLUE = (0, 0, 255) 
+BLACK = (0, 0, 0) 
+RED = (255, 0, 0) 
+GREEN = (34, 139, 34) 
+BROWN = (139, 69, 19) 
+WATER_BLUE = (64, 164, 223) 
+GRAY = (128, 128, 128) 
+GRID_LINE_COLOR = (50, 50, 50) 
 
-# Камера
-camera_x0, camera_y0 = 0, 0
+ 
 
+# Игрок 
+player_size = pg.Rect(WIDTH // 2, HEIGHT // 2, CELL_SIZE, CELL_SIZE) 
+speed = 500 
 
+# Камера 
+camera_x0, camera_y0 = 0, 0 
 
 class App:
     def __init__(self):
-        self.screen = pg.display.set_mode((0, 0), settings.FULLSCREEN)
+        self.screen = pg.display.set_mode((0, 0), pg.FULLSCREEN)
         self.clock = pg.time.Clock()
-        self.biomes = bm.Biomes(app=self, pg=pg)
+        self.biomes = bm.Biomes(app=self.screen, pg=pg)
 
     def run(self):
         while True:
@@ -56,6 +58,9 @@ class App:
 
             self.clock.tick(settings.FPS)
             pg.display.set_caption(f'FPS: {self.clock.get_fps()}')
+
+
+
 
 class BiomesType(Enum):
     SEA = 0
@@ -73,7 +78,6 @@ class Biomes:
     def main_render_biomes(self):
         start = time.time()
         self.set_layout_lands_and_sea()
-        self.set_layout_sands()
         self.set_layout_sea_shore()
         self.set_layout_woods()
         print(f'Render Time is {time.time() - start:.2f}s')
@@ -107,22 +111,6 @@ class Biomes:
                 if self.matrix[x][y] == target_biome and neighbors in rules:
                     self.matrix[x][y] = new_biome
                     self.paint_pixel_element(new_biome, x, y)
-        self.pg.display.update()
-
-    # -------------------- SAND --------------------
-    def set_layout_sands(self):
-        self.start_border(BiomesType.LAND, BiomesType.SEA, BiomesType.SAND, 1)
-        for _ in range(settings.COUNTS_ALGORITHMS_SANDS):
-            self.next_sand_gen()
-
-    def start_border(self, target, neighbor, new_biome, min_neighbors=1):
-        rows, cols = len(self.matrix), len(self.matrix[0])
-        for x in range(rows):
-            for y in range(cols):
-                if self.matrix[x][y] == target:
-                    if self.count_neighbors(x, y, neighbor) >= min_neighbors:
-                        self.matrix[x][y] = new_biome
-                        self.paint_pixel_element(new_biome, x, y)
         self.pg.display.update()
 
     def next_sand_gen(self):
@@ -187,80 +175,79 @@ class Biomes:
         }[biome]
         self.pg.draw.rect(self.app.screen, color,
                           (x*settings.basicX, y*settings.basicY, settings.basicX, settings.basicY))
+
+
+
+# Загрузка спрайтов 
+try: 
+    original_img = pg.image.load('unknown_game_DL/sprite/sptite1.png').convert_alpha() 
+except pg.error: 
+    # Если файла нет, создаём тестовый спрайт (красный круг) 
+    original_img = pg.Surface((CELL_SIZE, CELL_SIZE), pg.SRCALPHA) 
+
+    pg.draw.circle(original_img, (255, 80, 80), (CELL_SIZE // 2, CELL_SIZE // 2), CELL_SIZE // 3) 
+    pg.draw.rect(original_img, (200, 200, 200), (0, 0, CELL_SIZE, CELL_SIZE), 2) 
+sprite = pg.transform.smoothscale(original_img, (CELL_SIZE, CELL_SIZE)) 
+
+# Создаем несколько тестовых стен 
+wall1 = pg.Rect(5 * CELL_SIZE, 5 * CELL_SIZE, CELL_SIZE, CELL_SIZE) 
+wall2 = pg.Rect(10 * CELL_SIZE, 10 * CELL_SIZE, CELL_SIZE, CELL_SIZE) 
+ 
+# Игровой цикл 
+clock = pg.time.Clock() 
+running = True 
+ 
+while running: 
+    dt = clock.tick(120) / 1000.0 
+     
+    # Обработка событий 
+    for event in pg.event.get(): 
+        if event.type == pg.QUIT: 
+            running = False 
+        if event.type == pg.KEYDOWN: 
+            if event.key == pg.K_ESCAPE: 
+                running = False 
+     
+    # Сохраняем предыдущую позицию на случай коллизии 
+    old_x, old_y = player_size.x, player_size.y 
+     
+    # Движение игрока 
+    keys = pg.key.get_pressed() 
+    if keys[pg.K_LEFT] or keys[pg.K_a]:  
+        player_size.x -= speed * dt 
+    if keys[pg.K_RIGHT] or keys[pg.K_d]:  
+        player_size.x += speed * dt  
+    if keys[pg.K_UP] or keys[pg.K_w]:  
+        player_size.y -= speed * dt 
+    if keys[pg.K_DOWN] or keys[pg.K_s]:  
+        player_size.y += speed * dt 
+     
+    # Проверка коллизии со стенами 
+    if player_size.colliderect(wall1) or player_size.colliderect(wall2): 
+        # Откатываем позицию, чтобы игрок не "заходил" внутрь стены 
+        player_size.x, player_size.y = old_x, old_y 
+     
+    # Обновление камеры (следим за игроком) 
+    camera_x0 = player_size.x - WIDTH // 2 
+    camera_y0 = player_size.y - HEIGHT // 2 
+     
+    # Отрисовка 
+    screen.fill(BLACK)  # Заполняем черным фоном 
+     
+    # Отрисовка стен 
+    screen.blit(sprite, (wall1.x - camera_x0, wall1.y - camera_y0)) 
+    screen.blit(sprite, (wall2.x - camera_x0, wall2.y - camera_y0)) 
+     
+    # Отрисовка игрока 
+    screen.blit(sprite, (player_size.x - camera_x0, player_size.y - camera_y0)) 
+     
+    # Обновление экрана 
+    pg.display.flip() 
+     
+    # Контроль FPS 
+    clock.tick(120) 
 app = App()
-app.run()
-
-
-# Загрузка спрайтов
-try:
-    original_img = pg.image.load('unknown_game_DL/sprite/Sprite-0002.jpg').convert_alpha()
-except pg.error:
-    # Если файла нет, создаём тестовый спрайт (красный круг)
-    original_img = pg.Surface((CELL_SIZE, CELL_SIZE), pg.SRCALPHA)
-    pg.draw.circle(original_img, (255, 80, 80), (CELL_SIZE // 2, CELL_SIZE // 2), CELL_SIZE // 3)
-    pg.draw.rect(original_img, (200, 200, 200), (0, 0, CELL_SIZE, CELL_SIZE), 2)
-
-sprite = pg.transform.smoothscale(original_img, (CELL_SIZE, CELL_SIZE))
-
-# Создаем несколько тестовых стен
-wall1 = pg.Rect(5 * CELL_SIZE, 5 * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-wall2 = pg.Rect(10 * CELL_SIZE, 10 * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-
-# Игровой цикл
-clock = pg.time.Clock()
-running = True
-
-while running:
-    dt = clock.tick(120) / 1000.0
-    
-    # Обработка событий
-    for event in pg.event.get():
-        if event.type == pg.QUIT:
-            running = False
-        if event.type == pg.KEYDOWN:
-            if event.key == pg.K_ESCAPE:
-                running = False
-    
-    # Сохраняем предыдущую позицию на случай коллизии
-    old_x, old_y = player_size.x, player_size.y
-    
-    # Движение игрока
-    keys = pg.key.get_pressed()
-    if keys[pg.K_LEFT] or keys[pg.K_a]: 
-        player_size.x -= speed * dt
-    if keys[pg.K_RIGHT] or keys[pg.K_d]: 
-        player_size.x += speed * dt 
-    if keys[pg.K_UP] or keys[pg.K_w]: 
-        player_size.y -= speed * dt
-    if keys[pg.K_DOWN] or keys[pg.K_s]: 
-        player_size.y += speed * dt
-    
-    # Проверка коллизии со стенами
-    if player_size.colliderect(wall1) or player_size.colliderect(wall2):
-        # Откатываем позицию, чтобы игрок не "заходил" внутрь стены
-        player_size.x, player_size.y = old_x, old_y
-    
-    # Обновление камеры (следим за игроком)
-    camera_x0 = player_size.x - WIDTH // 2
-    camera_y0 = player_size.y - HEIGHT // 2
-    
-    # Отрисовка
-    screen.fill(BLACK)  # Заполняем черным фоном
-    
-    
-    # Отрисовка стен
-    screen.blit(sprite, (wall1.x - camera_x0, wall1.y - camera_y0))
-    screen.blit(sprite, (wall2.x - camera_x0, wall2.y - camera_y0))
-    
-    # Отрисовка игрока
-    screen.blit(sprite, (player_size.x - camera_x0, player_size.y - camera_y0))
-    
-    # Обновление экрана
-    pg.display.flip()
-    
-    # Контроль FPS
-    clock.tick(120)
-
-# Завершение игры
-pg.quit()
-sys.exit()
+app.run() 
+# Завершение игры 
+pg.quit() 
+sys.exit() 
