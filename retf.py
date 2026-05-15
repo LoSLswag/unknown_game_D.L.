@@ -10,8 +10,8 @@ import time
 pg.init()
 
 # Настройки экрана
-CELL_SIZE = 128
-CHUNK_SIZE = 64  # Размер чанка в тайлах
+CELL_SIZE = 256
+CHUNK_SIZE = 32
 map_test = {}
 sprites = {}
 
@@ -22,21 +22,21 @@ pg.display.set_caption("Game")
 
 # Цвета
 WHITE = (255, 255, 255)
-BLUE = (0, 0, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-GREEN = (34, 139, 34)
-BROWN = (139, 69, 19)
-WATER_BLUE = (64, 164, 223)
 GRAY = (128, 128, 128)
-GRID_LINE_COLOR = (50, 50, 50)
 
 # Игрок
 pl_si = 64
-pl_sprite = pg.image.load("unknown_game_DL/sprite/Sprite-0001.png")  # Замените на путь к вашему файлу
-pl_sprite = pg.transform.scale(pl_sprite, (pl_si, pl_si))
-player_size = pg.Rect(5 * pl_si, 5 * pl_si , pl_si, pl_si)
-speed = 700  # Увеличил скорость для большого экрана
+try:
+    pl_sprite = pg.image.load("unknown_game_DL/sprite/player.jpg")
+    pl_sprite = pg.transform.scale(pl_sprite, (pl_si, pl_si))
+except:
+    pl_sprite = pg.Surface((pl_si, pl_si))
+    pl_sprite.fill(RED)
+
+player_size = pg.Rect(5 * pl_si, 5 * pl_si, pl_si, pl_si)
+speed = 700
 
 # Камера
 camera_x0, camera_y0 = 0, 0
@@ -53,222 +53,194 @@ class Biomes:
         self.screen = screen
         self.pg = pg
         self.matrix = self.create_start_matrix()
-        # Создаем поверхность для всей карты
-        rows, cols = settings.Rows, settings.Columns
-        self.map_surface = pg.Surface((cols * CELL_SIZE, rows * CELL_SIZE))
-        self.render_full_map()
 
-    def render_full_map(self):
-        """Отрисовывает всю карту на поверхность"""
-        rows, cols = len(self.matrix), len(self.matrix[0])
-        for x in range(rows):
-            for y in range(cols):
-                self.paint_pixel_element(self.matrix[x][y], x, y, draw_on_surface=True)
-    
     def main_render_biomes(self):
         start = time.time()
-        self.set_layout_lands_and_sea()
-        self.set_layout_sands()
-        self.set_layout_sea_shore()
-        self.set_layout_woods()
-        self.render_full_map()  # Перерисовываем карту после изменений
+        self.set_layout_lands_and_sea()  # Шаг 1: Создаем континенты
+        self.set_layout_beaches()        # Шаг 2: Добавляем пляжи (ТОЛЬКО у воды)
+        self.set_layout_woods()          # Шаг 3: Добавляем леса
         print(f'Render Time is {time.time() - start:.2f}s')
+        
+        # Статистика после генерации
+        self.print_stats()
+
+    def print_stats(self):
+        """Выводит статистику биомов"""
+        stats = {
+            BiomesType.SEA: 0,
+            BiomesType.LAND: 0,
+            BiomesType.SAND: 0,
+            BiomesType.SEA_SHORE: 0,
+            BiomesType.WOODS: 0
+        }
+        
+        for row in self.matrix:
+            for cell in row:
+                stats[cell] += 1
+        
+        total = sum(stats.values())
+        print(f"\n=== СТАТИСТИКА БИОМОВ ===")
+        print(f"Море (SEA): {stats[BiomesType.SEA]} ({stats[BiomesType.SEA]/total*100:.1f}%)")
+        print(f"Земля (LAND): {stats[BiomesType.LAND]} ({stats[BiomesType.LAND]/total*100:.1f}%)")
+        print(f"Песок (SAND): {stats[BiomesType.SAND]} ({stats[BiomesType.SAND]/total*100:.1f}%)")
+        print(f"Лес (WOODS): {stats[BiomesType.WOODS]} ({stats[BiomesType.WOODS]/total*100:.1f}%)")
+        print(f"Мелководье: {stats[BiomesType.SEA_SHORE]} ({stats[BiomesType.SEA_SHORE]/total*100:.1f}%)")
 
     # -------------------- LAND & SEA --------------------
     def set_layout_lands_and_sea(self):
-        self.matrix = self.create_start_matrix()
+        """Создание континентов (только море и земля)"""
         for _ in range(settings.COUNTS_ALGORITHMS):
-            self.next_generation(BiomesType.LAND, BiomesType.SEA, [3,6,7,8])
-            self.next_generation(BiomesType.SEA, BiomesType.LAND, [3,6,7,8])
-
+            # Море превращается в землю, если рядом много земли
+            self.next_generation(BiomesType.SEA, BiomesType.LAND, [5,6,7,8])
+            # Земля превращается в море, если рядом много моря
+            self.next_generation(BiomesType.LAND, BiomesType.SEA, [4,6,7,8])
+    
     # -------------------- GENERIC --------------------
     def count_neighbors(self, x, y, biome_type):
+        """Подсчет соседей (включая диагональные)"""
         count = 0
         rows, cols = len(self.matrix), len(self.matrix[0])
-        for dx in [-1,0,1]:
-            for dy in [-1,0,1]:
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
                 if dx == 0 and dy == 0:
                     continue
-                nx, ny = x+dx, y+dy
+                nx, ny = x + dx, y + dy
                 if 0 <= nx < rows and 0 <= ny < cols:
                     if self.matrix[nx][ny] == biome_type:
                         count += 1
         return count
 
     def next_generation(self, target_biome, new_biome, rules):
-        rows, cols = len(self.matrix), len(self.matrix[0])
-        new_matrix = [row[:] for row in self.matrix]  # Создаем копию
-        
-        for x in range(rows):
-            for y in range(cols):
-                neighbors = self.count_neighbors(x, y, new_biome)
-                if self.matrix[x][y] == target_biome and neighbors in rules:
-                    new_matrix[x][y] = new_biome
-                    self.paint_pixel_element(new_biome, x, y)
-        
-        self.matrix = new_matrix
-        self.pg.display.update()
-
-    # -------------------- SAND --------------------
-    def set_layout_sands(self):
-        self.start_border(BiomesType.LAND, BiomesType.SEA, BiomesType.SAND, 1)
-        for _ in range(settings.COUNTS_ALGORITHMS_SANDS):
-            self.next_sand_gen()
-
-    def start_border(self, target, neighbor, new_biome, min_neighbors=1):
+        """Один шаг клеточного автомата"""
         rows, cols = len(self.matrix), len(self.matrix[0])
         new_matrix = [row[:] for row in self.matrix]
         
         for x in range(rows):
             for y in range(cols):
-                if self.matrix[x][y] == target:
-                    if self.count_neighbors(x, y, neighbor) >= min_neighbors:
+                if self.matrix[x][y] == target_biome:
+                    neighbors = self.count_neighbors(x, y, new_biome)
+                    if neighbors in rules:
                         new_matrix[x][y] = new_biome
-                        self.paint_pixel_element(new_biome, x, y)
         
         self.matrix = new_matrix
-        self.pg.display.update()
 
-    def next_sand_gen(self):
+    # -------------------- BEACHES (ПЛЯЖИ) --------------------
+    def set_layout_beaches(self):
+        """Создание пляжей ТОЛЬКО на границе земли и моря"""
         rows, cols = len(self.matrix), len(self.matrix[0])
-        new_matrix = [row[:] for row in self.matrix]
         
+        # Сначала создаем мелководье
         for x in range(rows):
             for y in range(cols):
                 if self.matrix[x][y] == BiomesType.SEA:
-                    if self.count_neighbors(x, y, BiomesType.SAND) >= 5 and random.randint(1,50)==1:
-                        new_matrix[x][y] = BiomesType.SAND
-                        self.paint_pixel_element(BiomesType.SAND, x, y)
+                    if self.count_neighbors(x, y, BiomesType.LAND) >= 1:
+                        self.matrix[x][y] = BiomesType.SEA_SHORE
         
-        self.matrix = new_matrix
-        self.pg.display.update()
-
-    # -------------------- SEA SHORE --------------------
-    def set_layout_sea_shore(self):
-        self.start_border(BiomesType.SEA, BiomesType.SAND, BiomesType.SEA_SHORE, 1)
-        for _ in range(50):
-            self.next_sea_shore_gen()
-
-    def next_sea_shore_gen(self):
-        rows, cols = len(self.matrix), len(self.matrix[0])
-        new_matrix = [row[:] for row in self.matrix]
-        
+        # Затем создаем песок на земле у моря
         for x in range(rows):
             for y in range(cols):
-                if self.matrix[x][y] == BiomesType.SEA:
-                    if self.count_neighbors(x, y, BiomesType.SEA_SHORE) >= 4 and random.randint(1,30)==1:
-                        new_matrix[x][y] = BiomesType.SEA_SHORE
-                        self.paint_pixel_element(BiomesType.SEA_SHORE, x, y)
-        
-        self.matrix = new_matrix
-        self.pg.display.update()
+                if self.matrix[x][y] == BiomesType.LAND:
+                    if self.count_neighbors(x, y, BiomesType.SEA) >= 1 or \
+                       self.count_neighbors(x, y, BiomesType.SEA_SHORE) >= 1:
+                        self.matrix[x][y] = BiomesType.SAND
 
     # -------------------- WOODS --------------------
     def set_layout_woods(self):
-        self.start_random_woods()
-        for _ in range(20):
-            self.next_generation(BiomesType.LAND, BiomesType.WOODS, [3,6,7,8])
-            self.next_generation(BiomesType.WOODS, BiomesType.LAND, [3,6,7,8])
-
-    def start_random_woods(self):
+        """Создание лесов на земле (не на песке)"""
         rows, cols = len(self.matrix), len(self.matrix[0])
-        new_matrix = [row[:] for row in self.matrix]
         
+        # Леса только на земле (не на песке)
         for x in range(rows):
             for y in range(cols):
-                if self.matrix[x][y] == BiomesType.LAND and random.randint(1,2)==1:
-                    new_matrix[x][y] = BiomesType.WOODS
-                    self.paint_pixel_element(BiomesType.WOODS, x, y)
+                if self.matrix[x][y] == BiomesType.LAND:
+                    if random.randint(1, 3) == 1:  # 33% шанс леса
+                        self.matrix[x][y] = BiomesType.WOODS
         
-        self.matrix = new_matrix
+        # Несколько проходов для сглаживания лесов
+        for _ in range(5):
+            self.next_generation(BiomesType.LAND, BiomesType.WOODS, [5,6,7,8])
+            self.next_generation(BiomesType.WOODS, BiomesType.LAND, [1,2])
 
     # -------------------- UTILS --------------------
     def create_start_matrix(self):
+        """Создание начальной матрицы"""
         rows, cols = settings.Rows, settings.Columns
-        matrix = [[BiomesType.SEA if random.randint(1,2)==1 else BiomesType.LAND
-                   for _ in range(cols)] for _ in range(rows)]
-        for i in range(rows):
-            for j in range(cols):
-                self.paint_pixel_element(matrix[i][j], i, j)
-        self.pg.display.update()
+        
+        # 60% земли, 40% моря (больше земли)
+        matrix = []
+        for x in range(rows):
+            row = []
+            for y in range(cols):
+                if random.randint(1, 100) <= 50:  # 60% земли
+                    row.append(BiomesType.LAND)
+                else:
+                    row.append(BiomesType.SEA)
+            matrix.append(row)
+        
         return matrix
 
-    def paint_pixel_element(self, biome, x, y, draw_on_surface=False):
-        color = {
-            BiomesType.LAND: settings.COLOR_LAND,
-            BiomesType.SEA: settings.COLOR_SEA,
-            BiomesType.SAND: settings.COLOR_SAND,
-            BiomesType.SEA_SHORE: settings.COLOR_SEA_SHORE,
-            BiomesType.WOODS: settings.COLOR_WOODS
-        }[biome]
-        
-        # Рисуем на поверхности карты
-        pg.draw.rect(self.screen,color,
-                    (y * CELL_SIZE, x * CELL_SIZE, CELL_SIZE, CELL_SIZE))
-        
-        # Если нужно сразу на экран (для отладки)
-        if not draw_on_surface:
-            pg.draw.rect(self.screen, color,
-                        (y * CELL_SIZE - camera_x0, x * CELL_SIZE - camera_y0, CELL_SIZE, CELL_SIZE))
+    def get_color(self, biome):
+        """Получить цвет для биома"""
+        colors = {
+            BiomesType.LAND: settings.COLOR_LAND,      # Зеленый - земля
+            BiomesType.SEA: settings.COLOR_SEA,        # Синий - море
+            BiomesType.SAND: settings.COLOR_SAND,      # Песочный - пляж
+            BiomesType.SEA_SHORE: settings.COLOR_SEA_SHORE,  # Голубой - мелководье
+            BiomesType.WOODS: settings.COLOR_WOODS     # Темно-зеленый - лес
+        }
+        return colors.get(biome, BLACK)
 
     def draw(self, screen, camera_x, camera_y):
         """Отрисовывает видимую часть карты"""
-        # Определяем видимую область
+        rows, cols = len(self.matrix), len(self.matrix[0])
+        
         start_x = max(0, camera_x // CELL_SIZE)
         start_y = max(0, camera_y // CELL_SIZE)
-        end_x = min(len(self.matrix[0]), (camera_x + WIDTH) // CELL_SIZE + 2)
-        end_y = min(len(self.matrix), (camera_y + HEIGHT) // CELL_SIZE + 2)
+        end_x = min(cols, (camera_x + WIDTH) // CELL_SIZE + 2)
+        end_y = min(rows, (camera_y + HEIGHT) // CELL_SIZE + 2)
         
-        for x in range(start_y, end_y):
-            for y in range(start_x, end_x):
-                if 0 <= x < len(self.matrix) and 0 <= y < len(self.matrix[0]):
-                    screen_x = y * CELL_SIZE - camera_x
-                    screen_y = x * CELL_SIZE - camera_y
-                    if -CELL_SIZE <= screen_x < WIDTH and -CELL_SIZE <= screen_y < HEIGHT:
-                        color = {
-                            BiomesType.LAND: settings.COLOR_LAND,
-                            BiomesType.SEA: settings.COLOR_SEA,
-                            BiomesType.SAND: settings.COLOR_SAND,
-                            BiomesType.SEA_SHORE: settings.COLOR_SEA_SHORE,
-                            BiomesType.WOODS: settings.COLOR_WOODS
-                        }[self.matrix[x][y]]
-                        pg.draw.rect(screen, color, (screen_x, screen_y, CELL_SIZE, CELL_SIZE))
+        for y in range(start_y, end_y):
+            for x in range(start_x, end_x):
+                screen_x = x * CELL_SIZE - camera_x
+                screen_y = y * CELL_SIZE - camera_y
+                
+                if -CELL_SIZE <= screen_x < WIDTH and -CELL_SIZE <= screen_y < HEIGHT:
+                    color = self.get_color(self.matrix[y][x])
+                    pg.draw.rect(screen, color, (screen_x, screen_y, CELL_SIZE, CELL_SIZE))
 
 # Создаем экземпляр биомов
+print("Создание карты...")
 biomes = Biomes(screen, pg)
 biomes.main_render_biomes()
 
-wall_sprite = pg.image.load("unknown_game_DL/sprite/Sprite-0002.jpg")  # Замените на путь к вашему файлу
-wall_sprite = pg.transform.scale(wall_sprite, (CELL_SIZE, CELL_SIZE))
+# Загрузка спрайта стены
+try:
+    wall_sprite = pg.image.load("unknown_game_DL/sprite/Sprite-0002.jpg")
+    wall_sprite = pg.transform.scale(wall_sprite, (CELL_SIZE, CELL_SIZE))
+except:
+    wall_sprite = pg.Surface((CELL_SIZE, CELL_SIZE))
+    wall_sprite.fill(GRAY)
 
-
-# Создаем несколько тестовых стен
+# Стены
 wall1 = pg.Rect(5 * CELL_SIZE, 5 * CELL_SIZE, CELL_SIZE, CELL_SIZE)
 wall2 = pg.Rect(10 * CELL_SIZE, 10 * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-
 
 # Игровой цикл
 clock = pg.time.Clock()
 running = True
 
 while running:
-    dt = clock.tick(120) / 1000.0
+    dt = clock.tick(60) / 1000.0
     
-    # Обработка событий
     for event in pg.event.get():
         if event.type == pg.QUIT:
             running = False
         if event.type == pg.KEYDOWN:
             if event.key == pg.K_ESCAPE:
                 running = False
-            # Нажатие пробела для регенерации карты
-            if event.key == pg.K_SPACE:
-                biomes.main_render_biomes()
     
-    # Сохраняем предыдущую позицию на случай коллизии
     old_x, old_y = player_size.x, player_size.y
     
-    # Движение игрока
     keys = pg.key.get_pressed()
     if keys[pg.K_LEFT] or keys[pg.K_a]: 
         player_size.x -= speed * dt
@@ -279,40 +251,31 @@ while running:
     if keys[pg.K_DOWN] or keys[pg.K_s]: 
         player_size.y += speed * dt
     
-    # Проверка коллизии со стенами
+    # Коллизии
     if player_size.colliderect(wall1) or player_size.colliderect(wall2):
-        # Откатываем позицию, чтобы игрок не "заходил" внутрь стены
         player_size.x, player_size.y = old_x, old_y
     
-    # Обновление камеры (следим за игроком)
+    # Камера
     camera_x0 = player_size.x - WIDTH // 2
     camera_y0 = player_size.y - HEIGHT // 2
     
-    # Ограничиваем камеру границами карты
-    max_camera_x = max(0, settings.Columns * CELL_SIZE - WIDTH)
-    max_camera_y = max(0, settings.Rows * CELL_SIZE - HEIGHT)
+    max_camera_x = max(0, len(biomes.matrix[0]) * CELL_SIZE - WIDTH)
+    max_camera_y = max(0, len(biomes.matrix) * CELL_SIZE - HEIGHT)
     camera_x0 = max(0, min(camera_x0, max_camera_x))
     camera_y0 = max(0, min(camera_y0, max_camera_y))
     
     # Отрисовка
-    screen.fill(BLACK)  # Заполняем черным фоном
-    
-    # Отрисовка биомов с учетом камеры
+    screen.fill(BLACK)
     biomes.draw(screen, camera_x0, camera_y0)
     
-    # Отрисовка стен
-    screen.blit(wall_sprite, wall1)
-    screen.blit(wall_sprite, wall2)
+    # Стены
+    screen.blit(wall_sprite, (wall1.x - camera_x0, wall1.y - camera_y0))
+    screen.blit(wall_sprite, (wall2.x - camera_x0, wall2.y - camera_y0))
     
-    # Отрисовка игрока
-    screen.blit(pl_sprite, player_size)
+    # Игрок
+    screen.blit(pl_sprite, (player_size.x - camera_x0, player_size.y - camera_y0))
     
-    # Обновление экрана
     pg.display.flip()
-    
-    # Контроль FPS
-    clock.tick(120)
 
-# Завершение игры
 pg.quit()
 sys.exit()
