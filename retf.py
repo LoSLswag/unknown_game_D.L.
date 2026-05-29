@@ -154,12 +154,20 @@ class Biomes:
             for y in range(cols):
                 if self.matrix[x][y] == BiomesType.LAND:
                     if random.randint(1, 3) == 1:  # 33% шанс леса
-                        self.matrix[x][y] = BiomesType.WOODS
-        
-        # Несколько проходов для сглаживания лесов
-        for _ in range(5):
-            self.next_generation(BiomesType.LAND, BiomesType.WOODS, [5,6,7,8])
-            self.next_generation(BiomesType.WOODS, BiomesType.LAND, [1,2])
+                        tree_size = random.randint(20, 40)
+                        # Смещение внутри тайла
+                        offset_x = random.randint(0, CELL_SIZE - tree_size)
+                        offset_y = random.randint(0, CELL_SIZE - tree_size)
+                        self.trees.append((x, y, tree_size, offset_x, offset_y))
+                    
+                elif self.matrix[x][y] == BiomesType.WOODS:
+                    # В лесу больше деревьев (3-6 штук)
+                    num_trees = random.randint(3, 6)
+                    for _ in range(num_trees):
+                        tree_size = random.randint(20, 40)
+                        offset_x = random.randint(0, CELL_SIZE - tree_size)
+                        offset_y = random.randint(0, CELL_SIZE - tree_size)
+                        self.trees.append((x, y, tree_size, offset_x, offset_y))
 
     # -------------------- UTILS --------------------
     def create_start_matrix(self):
